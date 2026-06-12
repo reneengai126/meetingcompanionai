@@ -1,0 +1,47 @@
+name: decision-brief-generator
+description: >
+  Transforms any meeting topic into a structured decision brief,
+  Teams poll, and Outlook email draft using three-step reasoning.
+
+model:
+  api: chat
+  configuration:
+    type: azure_openai
+    azure_deployment: gpt-4o
+  parameters:
+    temperature: 0.2
+    max_tokens: 4000
+    response_format:
+      type: json_object
+
+inputs:
+  topic:
+    type: string
+    description: What needs to be decided
+  attendees:
+    type: string
+    description: Who is in the meeting and their roles
+  context:
+    type: string
+    description: Relevant background, constraints, prior decisions
+    default: "No additional context provided."
+  deadline:
+    type: string
+    description: When does this need to be decided
+    default: "No hard deadline."
+
+template: |
+  Generate a complete decision brief for the following meeting.
+
+  Topic: {{topic}}
+  Attendees: {{attendees}}
+  Context: {{context}}
+  Decision deadline: {{deadline}}
+
+  Follow all three steps in your instructions and return 
+  the complete JSON object.
+
+outputs:
+  decision_brief:
+    type: object
+    description: Complete structured decision brief with classify, structure, and outputs
