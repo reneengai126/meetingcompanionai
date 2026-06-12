@@ -1,0 +1,149 @@
+<AI Companion UI Website html>
+<html>
+<head>
+  <title>Decision Brief Generator</title>
+  <style>
+    body { font-family: system-ui; max-width: 720px; margin: 40px auto; padding: 0 20px; }
+    textarea, input { width: 100%; padding: 10px; margin: 8px 0 16px; 
+                      border: 1px solid #ddd; border-radius: 8px; font-size: 14px; }
+    textarea { height: 80px; resize: vertical; }
+    button { background: #0F6E56; color: white; border: none; padding: 12px 28px; 
+             border-radius: 8px; font-size: 15px; cursor: pointer; }
+    button:disabled { background: #ccc; }
+    .card { background: #f9f9f9; border-radius: 10px; padding: 20px; margin: 16px 0; 
+            border: 1px solid #eee; }
+    .tag { display: inline-block; padding: 3px 10px; border-radius: 20px; 
+           font-size: 12px; margin: 2px; }
+    .urgent { background: #FAEEDA; color: #633806; }
+    .strategic { background: #EEEDFE; color: #3C3489; }
+    .option { border-left: 3px solid #0F6E56; padding: 12px 16px; margin: 10px 0; 
+              background: white; border-radius: 0 8px 8px 0; }
+    .recommended { border-left-color: #185FA5; }
+    #spinner { display: none; color: #888; font-size: 14px; margin: 12px 0; }
+    #output { display: none; }
+    pre { white-space: pre-wrap; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1 style="font-size:24px;font-weight:500">Decision Brief Generator</h1>
+  <p style="color:#666;font-size:14px">Turn a meeting topic into a structured brief, 
+     Teams poll, and Outlook draft — before anyone walks into the room.</p>
+
+  <label style="font-size:14px;font-weight:500">What needs to be decided?</label>
+  <textarea id="topic" placeholder="e.g. Should we hire a Head of Sales or promote internally?"></textarea>
+
+  <label style="font-size:14px;font-weight:500">Who's in the meeting?</label>
+  <input id="attendees" placeholder="e.g. CEO, VP Engineering, VP Sales, CFO" />
+
+  <label style="font-size:14px;font-weight:500">Any context? (optional)</label>
+  <textarea id="context" placeholder="Budget constraints, recent events, prior decisions..." 
+            style="height:60px"></textarea>
+
+  <label style="font-size:14px;font-weight:500">Decision deadline</label>
+  <input id="deadline" placeholder="e.g. End of Q2, this Friday, no deadline" />
+
+  <button onclick="generate()" id="btn">Generate decision brief</button>
+  <div id="spinner">Analyzing decision... building brief...</div>
+
+  <div id="output">
+    <div class="card">
+      <div id="meta"></div>
+      <h2 style="font-size:17px;margin:16px 0 8px">What we're actually deciding</h2>
+      <p id="frame" style="font-size:14px;color:#333"></p>
+    </div>
+    <div class="card">
+      <h2 style="font-size:17px;margin:0 0 12px">Options</h2>
+      <div id="options"></div>
+    </div>
+    <div class="card">
+      <h2 style="font-size:17px;margin:0 0 12px">Key unknowns</h2>
+      <div id="unknowns"></div>
+    </div>
+    <div class="card">
+      <h2 style="font-size:17px;margin:0 0 8px">Teams poll preview</h2>
+      <pre id="poll"></pre>
+      <p style="font-size:12px;color:#888">Poll sent automatically via Work IQ when you click Generate.</p>
+    </div>
+    <div class="card">
+      <h2 style="font-size:17px;margin:0 0 8px">Outlook draft preview</h2>
+      <pre id="email"></pre>
+      <p style="font-size:12px;color:#888">Draft saved to your Outlook. Review and send when ready.</p>
+    </div>
+  </div>
+
+<script>
+const ENDPOINT = 'YOUR_FOUNDRY_ENDPOINT';
+const API_KEY  = 'YOUR_FOUNDRY_KEY';
+
+async function generate() {
+  const btn = document.getElementById('btn');
+  btn.disabled = true;
+  document.getElementById('spinner').style.display = 'block';
+  document.getElementById('output').style.display = 'none';
+
+  const payload = {
+    inputs: {
+      topic:     document.getElementById('topic').value,
+      attendees: document.getElementById('attendees').value,
+      context:   document.getElementById('context').value,
+      deadline:  document.getElementById('deadline').value
+    }
+  };
+
+  try {
+    const res = await fetch(ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'api-key': API_KEY },
+      body: JSON.stringify(payload)
+    });
+    const raw = await res.json();
+    const classify = JSON.parse(raw.outputs.classify_output);
+    const structure = JSON.parse(raw.outputs.structure_output);
+    const generate  = JSON.parse(raw.outputs.generate_output);
+    render(classify, structure, generate);
+  } catch(e) {
+    alert('Error: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    document.getElementById('spinner').style.display = 'none';
+  }
+}
+
+function render(c, s, g) {
+  document.getElementById('meta').innerHTML =
+    `<span class="tag ${c.decision_type}">${c.decision_type}</span>
+     <span class="tag ${c.urgency}">${c.urgency}</span>
+     <span class="tag" style="background:#E1F5EE;color:#085041">${c.reversibility}</span>
+     <span style="font-size:13px;color:#666;margin-left:8px">
+       Decision owner: <b>${c.decision_owner}</b></span>`;
+
+  document.getElementById('frame').textContent = s.frame;
+
+  document.getElementById('options').innerHTML = s.options.map(o => `
+    <div class="option ${s.recommendation.option === o.name ? 'recommended' : ''}">
+      <b style="font-size:14px">${o.name}</b>
+      ${s.recommendation.option === o.name ? 
+        '<span class="tag" style="background:#E6F1FB;color:#0C447C;margin-left:6px">Recommended</span>' : ''}
+      <p style="font-size:13px;color:#555;margin:6px 0">${o.description}</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+        <div><b style="color:#1D9E75">Pros</b><br>${o.pros.join('<br>')}</div>
+        <div><b style="color:#E24B4A">Cons</b><br>${o.cons.join('<br>')}</div>
+      </div>
+    </div>`).join('');
+
+  document.getElementById('unknowns').innerHTML = s.key_unknowns.map((q,i) =>
+    `<div style="font-size:13px;padding:8px 0;border-bottom:1px solid #eee">
+       <b style="color:#534AB7">${i+1}.</b> ${q}</div>`).join('');
+
+  document.getElementById('poll').textContent = 
+    g.teams_poll.message + '\n\n' + g.teams_poll.question + '\n' +
+    g.teams_poll.choices.map(c => `• ${c}`).join('\n');
+
+  document.getElementById('email').textContent = 
+    'Subject: ' + g.outlook_email.subject + '\n\n' + g.outlook_email.body;
+
+  document.getElementById('output').style.display = 'block';
+}
+</script>
+</body>
+</html>
